@@ -47,7 +47,7 @@ class BluetoothMeshService: NSObject {
     private var loggedCryptoErrors = Set<String>()  // Track which peers we've logged crypto errors for
     
     weak var delegate: BitchatDelegate?
-    private let encryptionService = EncryptionService()
+    let encryptionService = EncryptionService()  // Made public for enhanced encryption access
     private let messageQueue = DispatchQueue(label: "bitchat.messageQueue", attributes: .concurrent)
     private var processedMessages = Set<String>()
     private let maxTTL: UInt8 = 7  // Maximum hops for long-distance delivery

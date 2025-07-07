@@ -10,7 +10,6 @@ import Foundation
 import SwiftUI
 import Combine
 import CryptoKit
-import CommonCrypto
 #if os(iOS)
 import UIKit
 #endif
@@ -672,32 +671,13 @@ class ChatViewModel: ObservableObject {
     }
     
     private func deriveRoomKey(from password: String, roomName: String) -> SymmetricKey {
-        // Use PBKDF2 to derive a key from the password
-        let salt = roomName.data(using: .utf8)!  // Use room name as salt for consistency
-        let keyData = pbkdf2(password: password, salt: salt, iterations: 100000, keyLength: 32)
-        return SymmetricKey(data: keyData)
-    }
-    
-    private func pbkdf2(password: String, salt: Data, iterations: Int, keyLength: Int) -> Data {
-        var derivedKey = Data(count: keyLength)
-        let passwordData = password.data(using: .utf8)!
-        
-        _ = derivedKey.withUnsafeMutableBytes { derivedKeyBytes in
-            salt.withUnsafeBytes { saltBytes in
-                passwordData.withUnsafeBytes { passwordBytes in
-                    CCKeyDerivationPBKDF(
-                        CCPBKDFAlgorithm(kCCPBKDF2),
-                        passwordBytes.baseAddress, passwordData.count,
-                        saltBytes.baseAddress, salt.count,
-                        CCPseudoRandomAlgorithm(kCCPRFHmacAlgSHA256),
-                        UInt32(iterations),
-                        derivedKeyBytes.baseAddress, keyLength
-                    )
-                }
-            }
-        }
-        
-        return derivedKey
+        // Use enhanced encryption service with Argon2id-based key derivation
+        // This provides much better security than the old PBKDF2 implementation
+        return meshService.encryptionService.deriveRoomKey(
+            password: password, 
+            roomName: roomName, 
+            difficulty: .standard
+        )
     }
     
     func switchToRoom(_ room: String?) {

@@ -918,3 +918,155 @@ extension DispatchTimeInterval {
         return .seconds(minutes * 60)
     }
 }
+
+// MARK: - Compatibility Layer for Legacy API
+
+extension EncryptionService {
+    
+    /// Legacy API compatibility - Get combined public key data
+    /// Maps to new generateKeyBundle() method for backwards compatibility
+    func getCombinedPublicKeyData() -> Data {
+        let keyBundle = generateKeyBundle()
+        
+        // Create legacy format: identityKey + sessionKey + signingKey (96 bytes total)
+        var data = Data()
+        data.append(keyBundle.identityKey.rawRepresentation)  // 32 bytes
+        data.append(keyBundle.sessionKey.rawRepresentation)   // 32 bytes  
+        data.append(keyBundle.identitySigningKey.rawRepresentation)  // 32 bytes
+        return data
+    }
+    
+    /// Legacy API compatibility - Add peer public key
+    /// Maps to new initializeRatchet() method for backwards compatibility
+    func addPeerPublicKey(_ peerID: String, publicKeyData: Data) throws {
+        // Parse legacy format (96 bytes: identity + session + signing keys)
+        guard publicKeyData.count == 96 else {
+            throw EncryptionError.invalidPublicKey
+        }
+        
+        let identityKeyData = publicKeyData[0..<32]
+        let sessionKeyData = publicKeyData[32..<64]
+        let signingKeyData = publicKeyData[64..<96]
+        
+        // Create legacy key bundle from the data
+        let identityKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: identityKeyData)
+        let sessionKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: sessionKeyData)
+        let signingKey = try Curve25519.Signing.PublicKey(rawRepresentation: signingKeyData)
+        
+        // Create a signed pre-key (use session key as pre-key for compatibility)
+        let signedPreKey = SignedPreKey(
+            id: 1,
+            publicKey: sessionKey,
+            privateKey: Curve25519.KeyAgreement.PrivateKey(), // Temporary - won't be used
+            signature: Data() // Empty signature for legacy compatibility
+        )
+        
+        // Create minimal key bundle for compatibility
+        let keyBundle = KeyBundle(
+            identityKey: identityKey,
+            identitySigningKey: signingKey,
+            sessionKey: sessionKey,
+            sessionSigningKey: signingKey,
+            signedPreKey: signedPreKey,
+            preKeys: [], // Empty for legacy compatibility
+            postQuantumPublicKey: Data(count: 32), // Dummy PQ data
+            timestamp: Date()
+        )
+        
+        // Initialize ratchet (assume we're always the initiator for legacy compatibility)
+        try initializeRatchet(with: peerID, keyBundle: keyBundle, isInitiator: true)
+    }
+    
+    /// Legacy API compatibility - Encrypt data
+    /// Maps to new encryptMessage() method for backwards compatibility
+    func encrypt(_ data: Data, for peerID: String) throws -> Data {
+        let encryptedMessage = try encryptMessage(data, for: peerID, messageType: .normal)
+        
+        // Convert EncryptedMessage back to Data format for legacy compatibility
+        // Format: header(64 bytes) + ciphertext
+        var result = Data()
+        
+        // Serialize header (simplified for compatibility)
+        result.append(encryptedMessage.header.senderEphemeralKey.rawRepresentation) // 32 bytes
+        result.append(withUnsafeBytes(of: encryptedMessage.header.previousChainLength.bigEndian) { Data($0) }) // 4 bytes
+        result.append(withUnsafeBytes(of: encryptedMessage.header.messageNumber.bigEndian) { Data($0) }) // 4 bytes
+        result.append(Data(count: 24)) // Padding to make header 64 bytes
+        
+        // Append ciphertext
+        result.append(encryptedMessage.ciphertext)
+        
+        return result
+    }
+    
+    /// Legacy API compatibility - Decrypt data
+    /// Maps to new decryptMessage() method for backwards compatibility
+    func decrypt(_ data: Data, from peerID: String) throws -> Data {
+        guard data.count >= 64 else {
+            throw EncryptionError.decryptionFailed
+        }
+        
+        // Parse legacy format
+        let ephemeralKeyData = data[0..<32]
+        let previousChainLengthData = data[32..<36]
+        let messageNumberData = data[36..<40]
+        let ciphertext = data[64...]
+        
+        // Reconstruct header
+        let ephemeralKey = try Curve25519.KeyAgreement.PublicKey(rawRepresentation: ephemeralKeyData)
+        let previousChainLength = previousChainLengthData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        let messageNumber = messageNumberData.withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        
+        let header = MessageHeader(
+            senderEphemeralKey: ephemeralKey,
+            previousChainLength: previousChainLength,
+            messageNumber: messageNumber,
+            postQuantumData: nil
+        )
+        
+        let encryptedMessage = EncryptedMessage(
+            header: header,
+            ciphertext: Data(ciphertext),
+            timestamp: Date()
+        )
+        
+        return try decryptMessage(encryptedMessage, from: peerID)
+    }
+    
+    /// Legacy API compatibility - Sign data
+    /// Maps to new signData() method for backwards compatibility
+    func sign(_ data: Data) throws -> Data {
+        return try signData(data, useIdentityKey: false) // Use session key for legacy compatibility
+    }
+    
+    /// Legacy API compatibility - Verify signature
+    /// Maps to new verifySignature() method for backwards compatibility
+    func verify(_ signature: Data, for data: Data, from peerID: String) throws -> Bool {
+        return try verifySignature(signature, for: data, from: peerID, useIdentityKey: false)
+    }
+    
+    /// Legacy API compatibility - Get peer identity key
+    /// Returns the peer's identity key for favorites functionality
+    func getPeerIdentityKey(_ peerID: String) -> Data? {
+        return cryptoQueue.sync {
+            guard let ratchetState = ratchetStates[peerID] else {
+                return nil
+            }
+            return ratchetState.peerIdentityKey.rawRepresentation
+        }
+    }
+    
+    /// Legacy API compatibility - Clear persistent identity
+    /// Maps to enhanced clearAllStates() method
+    func clearPersistentIdentity() {
+        clearAllStates()
+        
+        // Also clear legacy storage for backwards compatibility
+        UserDefaults.standard.removeObject(forKey: "bitchat.identityKey")
+    }
+    
+    /// Legacy room key derivation compatibility
+    /// Maps to enhanced deriveRoomKey() with standard difficulty
+    func legacyDeriveRoomKey(from password: String, roomName: String) -> SymmetricKey {
+        return deriveRoomKey(password: password, roomName: roomName, difficulty: .standard)
+    }
+}
