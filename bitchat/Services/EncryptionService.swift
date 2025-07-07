@@ -16,6 +16,21 @@ import LocalAuthentication
 // MARK: - Enhanced Encryption Service Architecture
 
 /// Enhanced encryption service implementing Signal-style Double Ratchet with post-quantum resistance
+/// 
+/// This service provides enterprise-grade end-to-end encryption with the following features:
+/// - Perfect forward secrecy through Double Ratchet algorithm
+/// - Post-quantum cryptography preparation
+/// - Hardware Secure Enclave integration for key protection
+/// - Advanced metadata protection and traffic analysis resistance
+/// - Automatic key rotation and lifecycle management
+/// - Memory-hard password derivation using Argon2id
+/// 
+/// ## Security Features
+/// - **Forward Secrecy**: Each message uses unique keys that are immediately deleted
+/// - **Self-Healing**: Automatic recovery from compromised keys
+/// - **Hardware Protection**: Keys stored in Secure Enclave when available
+/// - **Traffic Analysis Protection**: Padding, timing obfuscation, and dummy traffic
+/// - **Post-Quantum Ready**: Hybrid classical+quantum-resistant approach
 class EncryptionService {
     
     // MARK: - Core Cryptographic State
@@ -102,6 +117,12 @@ class EncryptionService {
     // MARK: - Public Key Exchange
     
     /// Generate combined key bundle for peer exchange
+    /// 
+    /// Creates a comprehensive key bundle containing all necessary cryptographic material
+    /// for establishing a secure Double Ratchet session with a peer.
+    /// 
+    /// - Returns: KeyBundle containing identity keys, session keys, signed pre-keys, and post-quantum data
+    /// - Note: The key bundle includes signature verification data for authenticity
     func generateKeyBundle() -> KeyBundle {
         return cryptoQueue.sync {
             let preKeys = generatePreKeys(count: 10)
@@ -147,7 +168,17 @@ class EncryptionService {
     
     // MARK: - Message Encryption/Decryption
     
-    /// Encrypt message with Double Ratchet
+    /// Encrypt message with Double Ratchet algorithm
+    /// 
+    /// Encrypts a message using the Signal-style Double Ratchet algorithm, providing
+    /// perfect forward secrecy and self-healing properties.
+    /// 
+    /// - Parameters:
+    ///   - data: The plaintext message data to encrypt
+    ///   - peerID: Unique identifier for the recipient peer
+    ///   - messageType: Type of message (normal, ephemeral, groupKey)
+    /// - Returns: EncryptedMessage with header and ciphertext
+    /// - Throws: EncryptionError if encryption fails or no ratchet state exists
     func encryptMessage(_ data: Data, for peerID: String, messageType: MessageType = .normal) throws -> EncryptedMessage {
         return try cryptoQueue.sync(flags: .barrier) {
             guard let ratchetState = ratchetStates[peerID] else {
@@ -189,7 +220,17 @@ class EncryptionService {
     
     // MARK: - Room Encryption (Enhanced)
     
-    /// Derive room key using Argon2id
+    /// Derive room key using Argon2id password-based key derivation
+    /// 
+    /// Uses Argon2id (memory-hard function) to derive a strong encryption key from a password.
+    /// This provides resistance against both GPU and ASIC-based attacks.
+    /// 
+    /// - Parameters:
+    ///   - password: The room password provided by the user
+    ///   - roomName: Name of the room (used as salt input)
+    ///   - difficulty: Computational difficulty level (.fast, .standard, .secure, .paranoid)
+    /// - Returns: 256-bit symmetric key for room encryption
+    /// - Note: Higher difficulty levels provide better security but require more computation time
     func deriveRoomKey(password: String, roomName: String, difficulty: RoomKeyDifficulty = .standard) -> SymmetricKey {
         let salt = SHA256.hash(data: Data(roomName.utf8))
         let saltData = Data(salt)
