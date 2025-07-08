@@ -466,7 +466,7 @@ func encryptWithLayers(_ data: Data) throws -> Data {
 ---
 
 **Document Version:** 1.0  
-**Date:** December 2024  
+**Date:** JULY 2025  
 **Authors:** accessor  
 **Contact:** acc@accessor.io  
 **License:** Public Domain (Unlicense) 

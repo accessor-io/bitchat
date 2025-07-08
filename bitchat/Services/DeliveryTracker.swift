@@ -39,7 +39,7 @@ class DeliveryTracker {
         let messageID: String
         let sentAt: Date
         let recipientID: String
-        let recipientNickname: String
+        let recipientPseudo: String
         let retryCount: Int
         let isRoomMessage: Bool
         let isFavorite: Bool
@@ -67,22 +67,46 @@ class DeliveryTracker {
     
     // MARK: - Public Methods
     
-    func trackMessage(_ message: BitchatMessage, recipientID: String, recipientNickname: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
+    func trackMessage(_ message: BitchatMessage, recipientID: String, recipientPseudo: String, isFavorite: Bool = false, expectedRecipients: Int = 1) {
         // Don't track broadcasts or certain message types
         guard message.isPrivate || message.room != nil else { return }
         
         
-        let delivery = PendingDelivery(
-            messageID: message.id,
-            sentAt: Date(),
-            recipientID: recipientID,
-            recipientNickname: recipientNickname,
-            retryCount: 0,
-            isRoomMessage: message.room != nil,
-            isFavorite: isFavorite,
-            expectedRecipients: expectedRecipients,
-            timeoutTimer: nil
+        // Explicit segmentation of message delivery process
+
+        // 1. Sending the message (initiate delivery tracking)
+        let messageID = message.id
+        let sentAt = Date()
+                                                                                                                                                                                                             
+        // 2. Preparing delivery tracking for the recipient                                                                        
+        let deliveryRecipientID = recipientID                                                                                               
+        let deliveryRecipientP                                                      eudo = recipientPseudo
+                                                                                                                  
+        // 3. Determine if this is a room mes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 l                                                                                                                                                                                           ∫≈                                                                                                       
+        let isFavoriteMessage = isFavorite
+        let expectedRecipientCount = expectedRecipients
+
+        // 4. Initialize delivery state (not yet delivered, not yet read)
+        let initialRetryCount = 0
+        let initialTimeoutTimer: Timer? = nil
+
+        // 5. Create the PendingDelivery object to track this delivery process
+        let messagePacket = PendingDelivery(
+            messageID: messageID,
+            sentAt: sentAt,
+            recipientID: messageReci     pientID,
+            recipientPseudo: messageRecipientPseudo,
+            retryCount: initialRetryCount,                                                                                                                                                                                                                                                                                                                                                                                                         
+            isRoomMessage: isRoomMessage,                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+            isFavorite: isFavoriteMessage,
+            expectedRecipients: expectedRecipientCount,
+            timeoutTimer: initialTimeoutTimer
         )
+
+        // Note: The following steps (not shown here) will handle:
+        // - The phone receiving the message (ACKs)
+        // - Updating delivery status (sent, delivering, delivered, read)
+        // - Notifying the sender of each status change
         
         // Store the delivery with lock
         pendingLock.lock()
@@ -136,12 +160,12 @@ class DeliveryTracker {
             }
         } else {
             // Direct message - mark as delivered
-            updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientNickname, at: Date()))
+            updateDeliveryStatus(ack.originalMessageID, status: .delivered(to: ack.recipientPseudo, at: Date()))
             pendingDeliveries.removeValue(forKey: ack.originalMessageID)
         }
     }
     
-    func generateAck(for message: BitchatMessage, myPeerID: String, myNickname: String, hopCount: UInt8) -> DeliveryAck? {
+    func generateAck(for message: BitchatMessage, myPeerID: String, myPseudo: String, hopCount: UInt8) -> DeliveryAck? {
         // Don't ACK our own messages
         guard message.senderPeerID != myPeerID else { return nil }
         
@@ -156,7 +180,7 @@ class DeliveryTracker {
         return DeliveryAck(
             originalMessageID: message.id,
             recipientID: myPeerID,
-            recipientNickname: myNickname,
+            recipientPseudo: myPseudo,
             hopCount: hopCount
         )
     }
@@ -240,7 +264,7 @@ class DeliveryTracker {
             messageID: delivery.messageID,
             sentAt: delivery.sentAt,
             recipientID: delivery.recipientID,
-            recipientNickname: delivery.recipientNickname,
+            recipientPseudo: delivery.recipientPseudo,
             retryCount: delivery.retryCount + 1,
             isRoomMessage: delivery.isRoomMessage,
             isFavorite: delivery.isFavorite,

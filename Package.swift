@@ -13,11 +13,20 @@ let package = Package(
             name: "bitchat",
             targets: ["bitchat"]
         ),
+        .library(
+            name: "bitchatLib",
+            targets: ["bitchat"]
+        ),
     ],
     targets: [
         .executableTarget(
             name: "bitchat",
             path: "bitchat"
+        ),
+        .testTarget(
+            name: "bitchatTests",
+            dependencies: ["bitchat"],
+            path: "bitchatTests"
         ),
     ]
 )

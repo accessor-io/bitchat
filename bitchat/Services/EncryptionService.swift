@@ -38,7 +38,7 @@ enum SecurityLevel: String, CaseIterable {
     }
 }
 
-// MARK: - Advanced Entropy Analysis (HAC Chapter 5 Implementation)
+// MARK: - Advanced Entropy Analysis 
 
 struct MaurerUniversalTest {
     let L: Int = 8  // Block length
@@ -186,9 +186,13 @@ struct HybridCryptoAnalyzer {
     }
 }
 
-// MARK: - Advanced Entropy Harvester
+// MARK: - Entropy Harvester
 
-struct AdvancedEntropyHarvester {
+protocol EntropySource {
+    func nextPool() -> Data   // must be ≥ 96 bytes
+}
+
+struct EntropyHarvester: EntropySource {
     
     static func harvestSystemEntropy() -> Data {
         var entropy = Data()
@@ -246,11 +250,15 @@ struct AdvancedEntropyHarvester {
         
         return enhanced
     }
+    
+    func nextPool() -> Data {
+        return enhancedEntropyPool()
+    }
 }
 
 // MARK: - Enhanced Encryption Service with Pattern Research
 
-/// Enhanced encryption service implementing cutting-edge cryptographic patterns
+///  encryption service implementing cutting-edge cryptographic patterns
 /// from advanced pattern research, including HAC Chapter 5, hybrid crypto analysis,
 /// and multi-layer security architectures
 class EncryptionService {
@@ -259,7 +267,7 @@ class EncryptionService {
     
     private var securityLevel: SecurityLevel = .high
     private var keyRotationTimer: Timer?
-    private let entropyHarvester = AdvancedEntropyHarvester.self
+    private let entropyHarvester: EntropySource // Changed to EntropySource
     private let maurerTester = MaurerUniversalTest()
     
     // MARK: - Cryptographic State
@@ -281,11 +289,13 @@ class EncryptionService {
     
     private var layeredKeys: LayeredKeys
     
-    // MARK: - Enhanced Initialization
+    // MARK: -  Initialization
     
-    init() throws {
-        // Generate enhanced entropy pool
-        let entropyPool = entropyHarvester.enhancedEntropyPool()
+    init(entropySource: EntropySource = EntropyHarvester()) throws { // Changed to EntropySource
+        // Assign injected entropy source
+        self.entropyHarvester = entropySource
+        // Generate  entropy pool
+        let entropyPool = entropySource.nextPool()
         
         // Test entropy quality with Maurer's Universal Test
         let entropyBits = entropyPool.map { byte in
@@ -297,7 +307,7 @@ class EncryptionService {
             throw EncryptionError.insufficientEntropy
         }
         
-        // Initialize identity keys with enhanced entropy
+        // Initialize identity keys with  entropy
         self.identitySigningKey = try Curve25519.Signing.PrivateKey(rawRepresentation: 
             entropyPool.subdata(in: 0..<32))
         self.identityAgreementKey = try Curve25519.KeyAgreement.PrivateKey(rawRepresentation: 
@@ -320,7 +330,7 @@ class EncryptionService {
         // Start key rotation based on security level
         startKeyRotation()
     }
-    
+    ]
     // MARK: - Security Level Management
     
     func setSecurityLevel(_ level: SecurityLevel) {
@@ -350,7 +360,7 @@ class EncryptionService {
     private func rotateKeys() async {
         do {
             // Generate new entropy pool
-            let newEntropy = entropyHarvester.enhancedEntropyPool()
+            let newEntropy = entropyHarvester.nextPool()
             
             // Test entropy quality
             let entropyBits = newEntropy.map { byte in
@@ -369,12 +379,15 @@ class EncryptionService {
             // Apply hybrid patterns for key derivation
             let primaryData = oldPrimary.withUnsafeBytes { bytes in
                 var data = Data(bytes)
-                let enhanced = newEntropy.subdata(in: 0..<32)
+                let entropySlice = newEntropy.subdata(in: 0..<32)
+                let mixingKey = newEntropy.subdata(in: 32..<64)
+                let rotationSalt = newEntropy.subdata(in: 64..<96)
+                let iterationCount = UInt32(securityLevel.rawValue * 1000)
                 
                 // Apply scrypt-like rotation
                 for i in 0..<data.count {
                     let old = UInt64(data[i])
-                    let new = UInt64(enhanced[i % enhanced.count])
+                    let new = UInt64(mixingKey[i % mixingKey.count])
                     data[i] = UInt8(HybridCryptoAnalyzer.scryptRotateXOR(old, new) & 0xFF)
                 }
                 return data
